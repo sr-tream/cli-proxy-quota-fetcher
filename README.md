@@ -64,18 +64,27 @@ deno run balanced-quota.ts sk-1234 http://127.0.0.1:8317/v0/management
 
 #### Output format
 
-The script outputs a JSON object with model names as keys and balanced quota values as floats:
+The script outputs a JSON object with model names as keys and balanced quota values as floats. It automatically handles:
+
+- **Provider Normalization**: Combines models from different providers (e.g., Antigravity, Gemini CLI)
+- **Shared Pools**: Groups models that share quotas (e.g., `gemini-3-pro` variants, `vertex-ai` group)
+- **Deduplication**: Merges thinking models with their base counterparts if quotas match
 
 ```json
 {
-  "claude-sonnet-4.5": 0.7733333,
   "gemini-2.5-flash": 0.99966665,
-  "gemini-2.5-flash-lite": 0.99966665,
-  ...
+  "gemini-3-pro": 0.95625,
+  "gemini-3-flash": 1,
+  "vertex-ai": 0.7733333,
+  "gemini-2.5-computer-use-preview-10-2025": 1
 }
 ```
 
-Where the value is calculated as the average of quotas from all providers that have the same model (e.g., `(1 + 0.9993333) / 2 = 0.99966665`).
+Where:
+- `gemini-2.5-flash`: Average of quotas from multiple providers
+- `gemini-3-pro`: Combined group of `high`, `low`, and `preview` variants
+- `vertex-ai`: Combined group of Claude and GPT-OSS models sharing the same pool
+- `gemini-2.5-computer-use-preview-10-2025`: Renamed from `rev19-uic3-1p`
 
 ## Examples
 
