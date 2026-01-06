@@ -171,11 +171,11 @@ function calculateBalancedQuotas(results: QuotaResult[]): Record<string, number>
     }
 
     if (result.provider === 'antigravity') {
-      const quotas = extractAntigravityQuotas(result.quota);
-      allQuotas.push(...quotas);
+      const extracted = extractAntigravityQuotas(result.quota);
+      allQuotas.push(...filterRedundantThinkingModels(extracted));
     } else if (result.provider === 'gemini-cli') {
-      const quotas = extractGeminiCliQuotas(result.quota);
-      allQuotas.push(...quotas);
+      const extracted = extractGeminiCliQuotas(result.quota);
+      allQuotas.push(...filterRedundantThinkingModels(extracted));
     }
   }
 
@@ -216,39 +216,36 @@ function calculateBalancedQuotas(results: QuotaResult[]): Record<string, number>
   }
 
   // Apply post-processing rules
-  let result = applyVertexAiGrouping(balancedQuotas);
-  result = applyThinkingModelGrouping(result);
-
-  return result;
+  return applyVertexAiGrouping(balancedQuotas);
 }
 
 /**
- * Apply grouping for thinking models
+ * Filter out redundant thinking models from a single provider's quota list
  * If a model has a "-thinking" variant with the exact same quota, keep only the non-thinking one.
- * Example: if "claude-sonnet-4-5" and "claude-sonnet-4-5-thinking" have same quota, remove "-thinking".
  */
-function applyThinkingModelGrouping(quotas: Record<string, number>): Record<string, number> {
-  const result = { ...quotas };
-  const keys = Object.keys(result);
+function filterRedundantThinkingModels(quotas: ModelQuota[]): ModelQuota[] {
+  const quotaMap = new Map<string, number>();
+  for (const q of quotas) {
+    quotaMap.set(q.modelId, q.remainingFraction);
+  }
 
-  for (const key of keys) {
-    if (key.endsWith('-thinking')) {
-      const baseKey = key.replace(/-thinking$/, '');
+  return quotas.filter(q => {
+    // Check if this is a thinking model
+    if (q.modelId.endsWith('-thinking')) {
+      const baseKey = q.modelId.replace(/-thinking$/, '');
       
-      // Check if base model exists
-      if (result[baseKey] !== undefined) {
-        const thinkingQuota = result[key];
-        const baseQuota = result[baseKey];
-
-        // If quotas are effectively equal, remove the thinking variant
-        if (Math.abs(thinkingQuota - baseQuota) < 1e-9) {
-          delete result[key];
+      // Check if base model exists in this provider
+      if (quotaMap.has(baseKey)) {
+        const baseQuota = quotaMap.get(baseKey)!;
+        
+        // If quotas are effectively equal, remove this thinking variant
+        if (Math.abs(q.remainingFraction - baseQuota) < 1e-9) {
+          return false;
         }
       }
     }
-  }
-
-  return result;
+    return true;
+  });
 }
 
 /**
