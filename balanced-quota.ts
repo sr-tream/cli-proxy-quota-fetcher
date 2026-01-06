@@ -38,8 +38,14 @@ interface ModelQuota {
  * 
  * SPECIAL RULES:
  * - gemini-3-pro variants (high/low/preview) are grouped into 'gemini-3-pro'
+ * - rev19-uic3-1p renamed to gemini-2.5-computer-use-preview-10-2025
  */
 function normalizeModelName(modelId: string): string {
+  // Special Rule: Rename rev19-uic3-1p
+  if (modelId === 'rev19-uic3-1p') {
+    return 'gemini-2.5-computer-use-preview-10-2025';
+  }
+
   // Special Rule: Gemini 3 Pro shared pool
   // gemini-3-pro, gemini-3-pro-preview, gemini-3-pro-high, gemini-3-pro-low -> gemini-3-pro
   if (['gemini-3-pro', 'gemini-3-pro-preview', 'gemini-3-pro-high', 'gemini-3-pro-low'].includes(modelId)) {
@@ -201,12 +207,48 @@ function calculateBalancedQuotas(results: QuotaResult[]): Record<string, number>
     let fullModelName = quotas[0].modelId;
     if (normalizedName === 'gemini-3-pro') {
       fullModelName = 'gemini-3-pro';
+    } else if (quotas[0].modelId === 'rev19-uic3-1p') {
+      // Special Rename Rule
+      fullModelName = 'gemini-2.5-computer-use-preview-10-2025';
     }
 
     balancedQuotas[fullModelName] = average;
   }
 
-  return applyVertexAiGrouping(balancedQuotas);
+  // Apply post-processing rules
+  let result = applyVertexAiGrouping(balancedQuotas);
+  result = applyThinkingModelGrouping(result);
+
+  return result;
+}
+
+/**
+ * Apply grouping for thinking models
+ * If a model has a "-thinking" variant with the exact same quota, keep only the non-thinking one.
+ * Example: if "claude-sonnet-4-5" and "claude-sonnet-4-5-thinking" have same quota, remove "-thinking".
+ */
+function applyThinkingModelGrouping(quotas: Record<string, number>): Record<string, number> {
+  const result = { ...quotas };
+  const keys = Object.keys(result);
+
+  for (const key of keys) {
+    if (key.endsWith('-thinking')) {
+      const baseKey = key.replace(/-thinking$/, '');
+      
+      // Check if base model exists
+      if (result[baseKey] !== undefined) {
+        const thinkingQuota = result[key];
+        const baseQuota = result[baseKey];
+
+        // If quotas are effectively equal, remove the thinking variant
+        if (Math.abs(thinkingQuota - baseQuota) < 1e-9) {
+          delete result[key];
+        }
+      }
+    }
+  }
+
+  return result;
 }
 
 /**
