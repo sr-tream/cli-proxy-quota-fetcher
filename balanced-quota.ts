@@ -35,8 +35,17 @@ interface ModelQuota {
  * Normalize model name for matching across providers
  * Removes common provider prefixes (gemini-, claude-, gpt-, qwen-) only
  * Keeps variant suffixes (like -thinking, -preview, -lite) to distinguish different model variants
+ * 
+ * SPECIAL RULES:
+ * - gemini-3-pro variants (high/low/preview) are grouped into 'gemini-3-pro'
  */
 function normalizeModelName(modelId: string): string {
+  // Special Rule: Gemini 3 Pro shared pool
+  // gemini-3-pro, gemini-3-pro-preview, gemini-3-pro-high, gemini-3-pro-low -> gemini-3-pro
+  if (['gemini-3-pro', 'gemini-3-pro-preview', 'gemini-3-pro-high', 'gemini-3-pro-low'].includes(modelId)) {
+    return 'gemini-3-pro';
+  }
+
   // Remove common provider prefixes only (keep everything else)
   let normalized = modelId;
 
@@ -188,11 +197,76 @@ function calculateBalancedQuotas(results: QuotaResult[]): Record<string, number>
     const average = total / quotas.length;
 
     // Use the full model name from the first quota for the output
-    const fullModelName = quotas[0].modelId;
+    // Unless it's the special Gemini 3 Pro group, then force 'gemini-3-pro'
+    let fullModelName = quotas[0].modelId;
+    if (normalizedName === 'gemini-3-pro') {
+      fullModelName = 'gemini-3-pro';
+    }
+
     balancedQuotas[fullModelName] = average;
   }
 
-  return balancedQuotas;
+  return applyVertexAiGrouping(balancedQuotas);
+}
+
+/**
+ * Apply Vertex AI grouping logic
+ * 1. Combine matching claude- models into gemini-claude-models
+ * 2. If gemini-claude-models matches gpt-oss-120b- models, combine all into vertex-ai
+ */
+function applyVertexAiGrouping(quotas: Record<string, number>): Record<string, number> {
+  const result = { ...quotas };
+  
+  // 1. Identify 'gemini-claude-' models (assuming this means keys starting with 'claude-' or 'gemini-claude-')
+  const claudeKeys = Object.keys(result).filter(k => 
+    k.startsWith('claude-') || k.startsWith('gemini-claude-')
+  );
+  
+  // Check if they have exact limits (all values equal)
+  let claudeValue: number | null = null;
+  let claudeConsistent = false;
+  
+  if (claudeKeys.length > 0) {
+    const values = claudeKeys.map(k => result[k]);
+    // Use a small epsilon for float comparison, or strict equality since they often come from same source
+    const firstVal = values[0];
+    claudeConsistent = values.every(v => Math.abs(v - firstVal) < 1e-9);
+    
+    if (claudeConsistent) {
+      claudeValue = firstVal;
+    }
+  }
+
+  // 2. Identify 'gpt-oss-120b-*' models
+  const gptKeys = Object.keys(result).filter(k => k.startsWith('gpt-oss-120b-'));
+  let gptValue: number | null = null;
+  let gptConsistent = false;
+
+  if (gptKeys.length > 0) {
+    const values = gptKeys.map(k => result[k]);
+    const firstVal = values[0];
+    gptConsistent = values.every(v => Math.abs(v - firstVal) < 1e-9);
+
+    if (gptConsistent) {
+      gptValue = firstVal;
+    }
+  }
+
+  // Logic Application
+  if (claudeConsistent && claudeValue !== null) {
+    // Check if we can combine with GPT OSS
+    if (gptConsistent && gptValue !== null && Math.abs(claudeValue - gptValue) < 1e-9) {
+      // Combine EVERYTHING into 'vertex-ai'
+      [...claudeKeys, ...gptKeys].forEach(k => delete result[k]);
+      result['vertex-ai'] = claudeValue;
+    } else {
+      // Combine only Claude models into 'gemini-claude-models'
+      claudeKeys.forEach(k => delete result[k]);
+      result['gemini-claude-models'] = claudeValue;
+    }
+  }
+
+  return result;
 }
 
 /**
