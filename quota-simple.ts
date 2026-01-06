@@ -428,9 +428,9 @@ async function main() {
     }, null, 2));
 
     // Summary to stderr (unless quiet mode)
+    const successCount = results.filter(r => r.status === 'success').length;
+    const errorCount = results.filter(r => r.status === 'error').length;
     if (!quietMode) {
-      const successCount = results.filter(r => r.status === 'success').length;
-      const errorCount = results.filter(r => r.status === 'error').length;
       console.error(`\n✓ Success: ${successCount}, ✗ Errors: ${errorCount}`);
     }
 
