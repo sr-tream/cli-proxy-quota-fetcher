@@ -127,12 +127,16 @@ function extractGeminiCliQuotas(quota: any): ModelQuota[] {
  * Call quota-simple.ts and parse the output
  */
 async function getQuotaSimpleOutput(apiKey: string, baseUrl: string): Promise<QuotaSimpleOutput> {
+  // Get absolute path to quota-simple.ts (same directory as this file)
+  const currentDir = new URL('.', import.meta.url).pathname;
+  const quotaSimplePath = `${currentDir}quota-simple.ts`;
+
   const cmd = new Deno.Command('deno', {
     args: [
       'run',
       '--allow-net',
       '--allow-read',
-      'quota-simple.ts',
+      quotaSimplePath,
       apiKey,
       baseUrl
     ],
