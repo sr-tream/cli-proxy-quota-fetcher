@@ -52,6 +52,11 @@ function normalizeModelName(modelId: string): string {
     return 'gemini-3-pro';
   }
 
+  // Special Rule: Gemini 3 Flash shared pool
+  if (['gemini-3-flash', 'gemini-3-flash-preview'].includes(modelId)) {
+    return 'gemini-3-flash';
+  }
+
   // Remove common provider prefixes only (keep everything else)
   let normalized = modelId;
 
@@ -207,6 +212,8 @@ function calculateBalancedQuotas(results: QuotaResult[]): Record<string, number>
     let fullModelName = quotas[0].modelId;
     if (normalizedName === 'gemini-3-pro') {
       fullModelName = 'gemini-3-pro';
+    } else if (normalizedName === 'gemini-3-flash') {
+      fullModelName = 'gemini-3-flash';
     } else if (quotas[0].modelId === 'rev19-uic3-1p') {
       // Special Rename Rule
       fullModelName = 'gemini-2.5-computer-use-preview-10-2025';
