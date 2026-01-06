@@ -13,32 +13,57 @@
 // CONSTANTS (from https://raw.githubusercontent.com/router-for-me/Cli-Proxy-API-Management-Center/refs/heads/main/src/utils/quota/constants.ts)
 // ============================================================================
 
-const ANTIGRAVITY_QUOTA_URLS = [
-  'https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',
-  'https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels',
-  'https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels'
-];
+// Import constants from remote URL with fallback to hardcoded values
+let ANTIGRAVITY_QUOTA_URLS: string[];
+let ANTIGRAVITY_REQUEST_HEADERS: Record<string, string>;
+let GEMINI_CLI_QUOTA_URL: string;
+let GEMINI_CLI_REQUEST_HEADERS: Record<string, string>;
+let CODEX_USAGE_URL: string;
+let CODEX_REQUEST_HEADERS: Record<string, string>;
 
-const ANTIGRAVITY_REQUEST_HEADERS = {
-  'Authorization': 'Bearer $TOKEN$',
-  'Content-Type': 'application/json',
-  'User-Agent': 'antigravity/1.11.5 windows/amd64'
-};
+const CONSTANTS_URL = 'https://raw.githubusercontent.com/router-for-me/Cli-Proxy-API-Management-Center/refs/heads/main/src/utils/quota/constants.ts';
 
-const GEMINI_CLI_QUOTA_URL = 'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota';
+try {
+  const remoteConstants = await import(CONSTANTS_URL);
+  ANTIGRAVITY_QUOTA_URLS = remoteConstants.ANTIGRAVITY_QUOTA_URLS;
+  ANTIGRAVITY_REQUEST_HEADERS = remoteConstants.ANTIGRAVITY_REQUEST_HEADERS;
+  GEMINI_CLI_QUOTA_URL = remoteConstants.GEMINI_CLI_QUOTA_URL;
+  GEMINI_CLI_REQUEST_HEADERS = remoteConstants.GEMINI_CLI_REQUEST_HEADERS;
+  CODEX_USAGE_URL = remoteConstants.CODEX_USAGE_URL;
+  CODEX_REQUEST_HEADERS = remoteConstants.CODEX_REQUEST_HEADERS;
+} catch (err) {
+  // Fallback to hardcoded constants if import fails
+  console.error(`⚠️  Warning: Failed to import constants from ${CONSTANTS_URL}`);
+  console.error(`   Error: ${err instanceof Error ? err.message : String(err)}`);
+  console.error(`   Using hardcoded fallback constants\n`);
 
-const GEMINI_CLI_REQUEST_HEADERS = {
-  'Authorization': 'Bearer $TOKEN$',
-  'Content-Type': 'application/json'
-};
+  ANTIGRAVITY_QUOTA_URLS = [
+    'https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',
+    'https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels',
+    'https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels'
+  ];
 
-const CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
+  ANTIGRAVITY_REQUEST_HEADERS = {
+    'Authorization': 'Bearer $TOKEN$',
+    'Content-Type': 'application/json',
+    'User-Agent': 'antigravity/1.11.5 windows/amd64'
+  };
 
-const CODEX_REQUEST_HEADERS = {
-  'Authorization': 'Bearer $TOKEN$',
-  'Content-Type': 'application/json',
-  'User-Agent': 'codex_cli_rs/0.76.0 (Debian 13.0.0; x86_64) WindowsTerminal'
-};
+  GEMINI_CLI_QUOTA_URL = 'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota';
+
+  GEMINI_CLI_REQUEST_HEADERS = {
+    'Authorization': 'Bearer $TOKEN$',
+    'Content-Type': 'application/json'
+  };
+
+  CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
+
+  CODEX_REQUEST_HEADERS = {
+    'Authorization': 'Bearer $TOKEN$',
+    'Content-Type': 'application/json',
+    'User-Agent': 'codex_cli_rs/0.76.0 (Debian 13.0.0; x86_64) WindowsTerminal'
+  };
+}
 
 // ============================================================================
 // TYPES
@@ -99,7 +124,7 @@ class CLIProxyAPIClient {
     return response.json();
   }
 
-  private async apiCall(req: any): Promise<any> {
+  async apiCall(req: any): Promise<any> {
     const result = await this.request<any>('POST', '/api-call', req);
 
     // The API returns: { status_code, header, body }
